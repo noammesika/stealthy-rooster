@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Stealthy Rooster - by Noam Mesika</title>
+    <title>Stealthy Rooster - Pro Edition</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <style>
         body { margin: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; }
-        canvas { display: block; background: linear-gradient(#87CEEB, #E0C9A6); margin: 0 auto; }
-        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; color: white; text-shadow: 2px 2px 4px #000; }
-        .lang-btns { position: absolute; top: 100px; width: 100%; display: flex; justify-content: center; gap: 5px; pointer-events: auto; }
-        .controls { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 50px; pointer-events: auto; }
+        canvas { display: block; margin: 0 auto; }
+        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; color: white; text-shadow: 2px 2px 4px #000; z-index: 10; }
+        .lang-btns { position: absolute; top: 100px; width: 100%; display: flex; justify-content: center; gap: 5px; pointer-events: auto; z-index: 10; }
+        .controls { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 50px; pointer-events: auto; z-index: 10; }
         button { padding: 8px 15px; border-radius: 20px; border: none; background: rgba(0,0,0,0.7); color: white; cursor: pointer; font-weight: bold; }
-        .ctrl-btn { width: 80px; height: 80px; border-radius: 50%; font-size: 14px; background: rgba(255,255,255,0.3); border: 2px solid white; }
+        .ctrl-btn { width: 85px; height: 85px; border-radius: 50%; font-size: 14px; background: rgba(255,255,255,0.3); border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     </style>
 </head>
 <body>
@@ -42,7 +42,7 @@
     canvas.height = window.innerHeight;
 
     let score = 0;
-    let gameSpeed = 4; 
+    let gameSpeed = 5; 
     let isGameOver = false;
     let currentLang = 'en';
 
@@ -53,15 +53,55 @@
         ru: { title: "Stealthy Rooster", score: "Score: ", up: "JUMP", down: "DUCK" }
     };
 
-    let rooster = { x: 50, y: canvas.height - 100, w: 50, h: 60, dy: 0, jumpForce: -15, gravity: 0.7, isCrouching: false };
+    // Physics adjusted for higher jump and smaller obstacles
+    let rooster = { x: 80, y: canvas.height - 130, w: 50, h: 60, dy: 0, jumpForce: -18, gravity: 0.8, isCrouching: false };
     let obstacles = [];
+    let clouds = [];
     let nextObstacleTimer = 0;
+
+    // Create clouds for background
+    for(let i=0; i<5; i++) {
+        clouds.push({ x: Math.random()*canvas.width, y: Math.random()*200, speed: 0.5 + Math.random() });
+    }
 
     function setLanguage(l) {
         currentLang = l;
         document.getElementById('gameTitle').innerText = translations[l].title;
-        document.getElementById('jumpBtn').innerText = translations[l].up + " (W)";
-        document.getElementById('crouchBtn').innerText = translations[l].down + " (S)";
+    }
+
+    function drawBackground() {
+        // Sky
+        let skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        skyGrad.addColorStop(0, "#87CEEB");
+        skyGrad.addColorStop(1, "#E0F7FA");
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Sun
+        ctx.fillStyle = "#FFF176";
+        ctx.beginPath();
+        ctx.arc(canvas.width - 80, 80, 40, 0, Math.PI*2);
+        ctx.fill();
+
+        // Clouds
+        ctx.fillStyle = "white";
+        clouds.forEach(c => {
+            c.x -= c.speed;
+            if(c.x < -100) c.x = canvas.width + 100;
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, 20, 0, Math.PI*2);
+            ctx.arc(c.x+20, c.y-10, 25, 0, Math.PI*2);
+            ctx.arc(c.x+40, c.y, 20, 0, Math.PI*2);
+            ctx.fill();
+        });
+
+        // Grass Ground
+        ctx.fillStyle = "#4CAF50"; // Green grass
+        ctx.fillRect(0, canvas.height - 70, canvas.width, 70);
+        ctx.fillStyle = "#388E3C"; // Darker grass pattern
+        for(let i=0; i<canvas.width; i+=40) {
+            ctx.fillRect(i, canvas.height - 70, 2, 10);
+        }
     }
 
     function drawRooster() {
@@ -75,11 +115,11 @@
         ctx.fill();
         
         ctx.fillStyle = "red";
-        ctx.fillRect(rooster.w/2 - 5, -10, 15, 15);
+        ctx.fillRect(rooster.w/2 - 5, -10, 15, 15); // Comb
         
         ctx.fillStyle = "black";
         ctx.beginPath();
-        ctx.arc(rooster.w - 10, drawH/3, 3, 0, Math.PI * 2);
+        ctx.arc(rooster.w - 10, drawH/3, 3, 0, Math.PI * 2); // Eye
         ctx.fill();
         
         ctx.restore();
@@ -88,33 +128,34 @@
     function update() {
         if (isGameOver) return;
 
-        score += 0.2; 
+        score += 0.15; // Slower score increase
         let displayScore = Math.floor(score);
         document.getElementById('scoreDisplay').innerText = translations[currentLang].score + displayScore;
 
         if (displayScore > 300 && displayScore % 100 === 0) {
-            gameSpeed += 0.01;
+            gameSpeed += 0.02;
         }
 
         rooster.dy += rooster.gravity;
         rooster.y += rooster.dy;
-        let ground = canvas.height - 50;
-        if (rooster.y > ground - (rooster.isCrouching ? 30 : 60)) {
-            rooster.y = ground - (rooster.isCrouching ? 30 : 60);
+        let groundLevel = canvas.height - 70;
+        let roosterHeight = rooster.isCrouching ? 30 : 60;
+
+        if (rooster.y > groundLevel - roosterHeight) {
+            rooster.y = groundLevel - roosterHeight;
             rooster.dy = 0;
         }
 
         nextObstacleTimer--;
         if (nextObstacleTimer <= 0) {
-            let type = Math.random() > 0.3 ? 'ground' : 'air';
+            let isAir = Math.random() > 0.7;
             obstacles.push({
                 x: canvas.width,
-                y: type === 'ground' ? ground - 40 : ground - 90,
-                w: 40,
-                h: 40,
-                type: type
+                y: isAir ? groundLevel - 100 : groundLevel - 35,
+                w: 35, // Smaller obstacle
+                h: 35
             });
-            nextObstacleTimer = 100 + Math.random() * 50; 
+            nextObstacleTimer = 120 + Math.random() * 80; // More space between obstacles
         }
 
         obstacles.forEach((obs, i) => {
@@ -137,15 +178,15 @@
 
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.fillStyle = "#555";
-        ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
-
+        drawBackground();
         drawRooster();
 
-        ctx.fillStyle = "#8B4513";
+        // Draw Obstacles as Hay Bales
+        ctx.fillStyle = "#FBC02D";
         obstacles.forEach(obs => {
             ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+            ctx.strokeStyle = "#F9A825";
+            ctx.strokeRect(obs.x+5, obs.y+5, obs.w-10, obs.h-10);
         });
     }
 
@@ -157,9 +198,9 @@
         if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') rooster.isCrouching = false;
     });
 
-    document.getElementById('jumpBtn').ontouchstart = (e) => { e.preventDefault(); if(rooster.dy === 0) rooster.dy = rooster.jumpForce; };
-    document.getElementById('crouchBtn').ontouchstart = (e) => { e.preventDefault(); rooster.isCrouching = true; };
-    document.getElementById('crouchBtn').ontouchend = (e) => { e.preventDefault(); rooster.isCrouching = false; };
+    document.getElementById('jumpBtn').onmousedown = () => { if(rooster.dy === 0) rooster.dy = rooster.jumpForce; };
+    document.getElementById('crouchBtn').onmousedown = () => { rooster.isCrouching = true; };
+    document.getElementById('crouchBtn').onmouseup = () => { rooster.isCrouching = false; };
 
     update();
 </script>
