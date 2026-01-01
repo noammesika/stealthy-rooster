@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stealthy Rooster - by Noam Mesika</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; text-align: center; }
+        canvas { display: block; background: #e0e0e0; margin: 0 auto; border-bottom: 5px solid #555; }
+        #ui { position: absolute; top: 10px; width: 100%; color: white; text-shadow: 2px 2px 4px #000; pointer-events: none; }
+        .controls { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: space-around; pointer-events: auto; }
+        button { padding: 20px; font-size: 20px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); color: white; width: 80px; height: 80px; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <h1 id="gameTitle">Stealthy Rooster</h1>
+    <p>Created by: Noam Mesika</p>
+    <div id="score">Score: 0</div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="controls">
+    <button id="jumpBtn">UP</button>
+    <button id="crouchBtn">DOWN</button>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight * 0.6;
+
+    let score = 0;
+    let gameSpeed = 5;
+    let isGameOver = false;
+
+    // The Rooster
+    let rooster = {
+        x: 50, y: canvas.height - 60,
+        w: 40, h: 50,
+        dy: 0, jumpForce: -12, gravity: 0.6,
+        isCrouching: false
+    };
+
+    let obstacles = [];
+
+    function spawnObstacle() {
+        let type = Math.random() > 0.5 ? 'ground' : 'air';
+        obstacles.push({
+            x: canvas.width,
+            y: type === 'ground' ? canvas.height - 40 : canvas.height - 100,
+            w: 30, h: 30, type: type
+        });
+    }
+
+    function update() {
+        if (isGameOver) return;
+
+        // Physics
+        rooster.dy += rooster.gravity;
+        rooster.y += rooster.dy;
+
+        if (rooster.y > canvas.height - rooster.h) {
+            rooster.y = canvas.height - rooster.h;
+            rooster.dy = 0;
+        }
+
+        // Move Obstacles
+        obstacles.forEach((obs, index) => {
+            obs.x -= gameSpeed;
+            
+            // Collision Detection
+            if (rooster.x < obs.x + obs.w && rooster.x + rooster.w > obs.x &&
+                rooster.y < obs.y + obs.h && rooster.y + rooster.h > obs.y) {
+                isGameOver = true;
+                alert("Game Over! Score: " + score);
+                location.reload();
+            }
+        });
+
+        // Speed Up Every 25 Points
+        score++;
+        if (score % 250 === 0) { // Using 250 for frames equivalent to ~25 points
+            gameSpeed += 0.5;
+        }
+
+        if (Math.random() < 0.02) spawnObstacle();
+        
+        document.getElementById('score').innerText = "Score: " + Math.floor(score/10);
+        draw();
+        requestAnimationFrame(update);
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw Rooster (Noam's Hero)
+        ctx.fillStyle = rooster.isCrouching ? 'brown' : 'orange';
+        let currentH = rooster.isCrouching ? rooster.h/2 : rooster.h;
+        let currentY = rooster.isCrouching ? rooster.y + rooster.h/2 : rooster.y;
+        ctx.fillRect(rooster.x, currentY, rooster.w, currentH);
+
+        // Draw Obstacles
+        ctx.fillStyle = 'red';
+        obstacles.forEach(obs => ctx.fillRect(obs.x, obs.y, obs.w, obs.h));
+    }
+
+    // Controls
+    document.getElementById('jumpBtn').ontouchstart = () => { if(rooster.y >= canvas.height - rooster.h) rooster.dy = rooster.jumpForce; };
+    document.getElementById('crouchBtn').ontouchstart = () => { rooster.isCrouching = true; };
+    document.getElementById('crouchBtn').ontouchend = () => { rooster.isCrouching = false; };
+
+    update();
+</script>
+</body>
+</html>
