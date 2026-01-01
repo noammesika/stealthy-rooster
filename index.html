@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="description" content="Stealthy Rooster - An addictive jumping game by Noam Mesika">
+    <meta name="description" content="Stealthy Rooster - Black Star Challenge by Noam Mesika">
     <title>Stealthy Rooster - by Noam Mesika</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <style>
@@ -27,7 +27,7 @@
 
 <div id="menu">
     <h2 style="color: #333;">Stealthy Rooster</h2>
-    <p style="color: #666;">Select Difficulty</p>
+    <p style="color: #666;">Choose Your Difficulty</p>
     <button onclick="startGame(7)">Normal</button>
     <button onclick="startGame(10)" style="background: #f1c40f;">Pro</button>
     <button onclick="startGame(13)" style="background: #e74c3c;">Extreme</button>
@@ -56,6 +56,7 @@
     let rooster = { x: 50, y: 0, w: 50, h: 60, dy: 0, jumpForce: -20, gravity: 0.8, isCrouching: false };
     let obstacles = [];
     let clouds = [];
+    let bonusStars = [];
     let nextObstacleTimer = 0;
 
     function startGame(speed) {
@@ -63,40 +64,29 @@
         gameActive = true;
         document.getElementById('menu').style.display = 'none';
         document.getElementById('mobileControls').style.display = 'flex';
-        // Initialize clouds
         for(let i=0; i<5; i++) clouds.push({x: Math.random()*canvas.width, y: 50+Math.random()*100, s: 0.5+Math.random()});
         update();
     }
 
-    function drawSun() {
-        ctx.fillStyle = "#FFC300";
-        ctx.beginPath(); ctx.arc(canvas.width - 80, 80, 40, 0, Math.PI*2); ctx.fill();
-    }
-
-    function drawCloud(x, y, s) {
-        ctx.fillStyle = "white";
+    function drawStar(x, y, radius, points, color) {
+        ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(x, y, 20*s, 0, Math.PI*2); ctx.arc(x+15*s, y-10*s, 20*s, 0, Math.PI*2);
-        ctx.arc(x+30*s, y, 20*s, 0, Math.PI*2); ctx.fill();
-    }
-
-    function drawRooster() {
-        ctx.save();
-        if (invincibilityFrames % 10 > 5) ctx.globalAlpha = 0.3;
-        ctx.translate(rooster.x, rooster.y);
-        let drawH = rooster.isCrouching ? rooster.h/2 : rooster.h;
-        ctx.fillStyle = "#FFD700"; 
-        ctx.beginPath(); ctx.ellipse(rooster.w/2, drawH/2, rooster.w/2, drawH/2, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "red"; ctx.fillRect(rooster.w/2 - 5, -10, 15, 15);
-        ctx.fillStyle = "black"; ctx.beginPath(); ctx.arc(rooster.w - 10, drawH/3, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
+        ctx.moveTo(x, y + radius);
+        for (let i = 0; i < points * 2; i++) {
+            let angle = i * Math.PI / points;
+            let r = (i % 2 === 0) ? radius : radius / 2;
+            ctx.lineTo(x + r * Math.sin(angle), y + r * Math.cos(angle));
+        }
+        ctx.closePath();
+        ctx.fill();
     }
 
     function update() {
         if (!gameActive || isGameOver) return;
 
         score += 0.2;
-        document.getElementById('scoreDisplay').innerText = "Score: " + Math.floor(score);
+        let displayScore = Math.floor(score);
+        document.getElementById('scoreDisplay').innerText = "Score: " + displayScore;
         if (invincibilityFrames > 0) invincibilityFrames--;
 
         rooster.dy += rooster.gravity;
@@ -109,34 +99,54 @@
             rooster.dy = 0;
         }
 
-        // Obstacles with refined height for DUCKING
+        // Spawning Logic
         nextObstacleTimer--;
         if (nextObstacleTimer <= 0) {
             let isAir = Math.random() > 0.6;
-            let obsH = 30;
-            // Air obstacles are now lower - must duck!
-            let obsY = isAir ? groundY - 75 : groundY - obsH; 
-            obstacles.push({ x: canvas.width, y: obsY, w: 30, h: obsH, type: isAir ? 'air' : 'ground' });
+            let obsY = isAir ? groundY - 75 : groundY - 30; 
+            obstacles.push({ x: canvas.width, y: obsY, radius: 20, type: isAir ? 'air' : 'ground' });
+            
+            // Spawn Yellow Heart Star after 750 points
+            if (displayScore > 750 && Math.random() < 0.2) {
+                bonusStars.push({ x: canvas.width + 200, y: groundY - 80, radius: 15 });
+            }
+            
             nextObstacleTimer = 70 + Math.random() * 50;
         }
 
+        // Obstacles collision (Black Stars)
         obstacles.forEach((obs, i) => {
             obs.x -= gameSpeed;
-            // Hitbox Shrink: Only detect collision if 10px inside the sprite
             let p = 10; 
             let rH = rooster.isCrouching ? 30 : 60;
             if (invincibilityFrames === 0 && 
-                rooster.x + p < obs.x + obs.w && rooster.x + rooster.w - p > obs.x &&
-                rooster.y + p < obs.y + obs.h && rooster.y + rH - p > obs.y) {
+                rooster.x + p < obs.x + obs.radius && rooster.x + rooster.w - p > obs.x - obs.radius &&
+                rooster.y + p < obs.y + obs.radius && rooster.y + rH - p > obs.y - obs.radius) {
                 lives--;
                 invincibilityFrames = 80;
                 document.getElementById('heartDisplay').innerText = "❤️".repeat(lives);
-                if (lives <= 0) { isGameOver = true; alert("Game Over! Score: " + Math.floor(score)); location.reload(); }
+                obstacles.splice(i, 1);
+                if (lives <= 0) { isGameOver = true; alert("Game Over! Score: " + displayScore); location.reload(); }
+            }
+        });
+
+        // Bonus Stars logic (Yellow Stars)
+        bonusStars.forEach((star, i) => {
+            star.x -= gameSpeed;
+            let rH = rooster.isCrouching ? 30 : 60;
+            if (rooster.x < star.x + star.radius && rooster.x + rooster.w > star.x - star.radius &&
+                rooster.y < star.y + star.radius && rooster.y + rH > star.y - star.radius) {
+                if (lives < 3) {
+                    lives++;
+                    document.getElementById('heartDisplay').innerText = "❤️".repeat(lives);
+                }
+                bonusStars.splice(i, 1);
             }
         });
 
         clouds.forEach(c => { c.x -= gameSpeed * 0.2; if(c.x < -100) c.x = canvas.width + 100; });
         if (obstacles.length > 0 && obstacles[0].x < -50) obstacles.shift();
+        if (bonusStars.length > 0 && bonusStars[0].x < -50) bonusStars.shift();
 
         draw();
         requestAnimationFrame(update);
@@ -144,22 +154,35 @@
 
     function draw() {
         ctx.fillStyle = "#87CEEB"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        drawSun();
-        clouds.forEach(c => drawCloud(c.x, c.y, c.s));
+        // Draw Sun and Clouds
+        ctx.fillStyle = "#FFC300"; ctx.beginPath(); ctx.arc(canvas.width - 80, 80, 40, 0, Math.PI*2); ctx.fill();
+        clouds.forEach(c => {
+            ctx.fillStyle = "white"; ctx.beginPath();
+            ctx.arc(c.x, c.y, 20*c.s, 0, Math.PI*2); ctx.arc(c.x+15*c.s, c.y-10*c.s, 20*c.s, 0, Math.PI*2);
+            ctx.arc(c.x+30*c.s, c.y, 20*c.s, 0, Math.PI*2); ctx.fill();
+        });
         
         // Grass
         ctx.fillStyle = "#2ecc71"; ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
-        ctx.fillStyle = "#27ae60"; 
-        for(let i=0; i<canvas.width; i+=20) { ctx.beginPath(); ctx.moveTo(i, canvas.height-50); ctx.lineTo(i+10, canvas.height-65); ctx.lineTo(i+20, canvas.height-50); ctx.fill(); }
 
-        drawRooster();
-        obstacles.forEach(obs => {
-            ctx.fillStyle = obs.type === 'air' ? "#e74c3c" : "#8b4513";
-            ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-        });
+        // Draw Rooster
+        ctx.save();
+        if (invincibilityFrames % 10 > 5) ctx.globalAlpha = 0.3;
+        ctx.translate(rooster.x, rooster.y);
+        let drawH = rooster.isCrouching ? rooster.h/2 : rooster.h;
+        ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.ellipse(rooster.w/2, drawH/2, rooster.w/2, drawH/2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "red"; ctx.fillRect(rooster.w/2 - 5, -10, 15, 15);
+        ctx.fillStyle = "black"; ctx.beginPath(); ctx.arc(rooster.w - 10, drawH/3, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+
+        // Draw Obstacles (Black Stars)
+        obstacles.forEach(obs => drawStar(obs.x, obs.y, obs.radius, 5, "black"));
+
+        // Draw Bonus Stars (Yellow Stars)
+        bonusStars.forEach(star => drawStar(star.x, star.y, star.radius, 5, "#FFD700"));
     }
 
-    // Input Logic
+    // Input
     const jump = () => { if(rooster.dy === 0 && !rooster.isCrouching) rooster.dy = rooster.jumpForce; };
     window.addEventListener('keydown', (e) => {
         if (e.key === 'w' || e.key === 'ArrowUp') jump();
