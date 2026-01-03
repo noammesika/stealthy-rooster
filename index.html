@@ -1,200 +1,61 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="description" content="Stealthy Rooster - Black Star Challenge by Noam Mesika">
-    <title>Stealthy Rooster - by Noam Mesika</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Stealthy Rooster - Pig Laugh Update</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #87CEEB; }
-        canvas { display: block; margin: 0 auto; }
-        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; color: white; text-shadow: 2px 2px 4px #000; z-index: 5; }
-        #menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.95); padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.3); z-index: 10; }
-        .hearts { font-size: 30px; color: red; margin-top: 10px; }
-        button { padding: 12px 25px; border-radius: 25px; border: none; background: #2ecc71; color: white; cursor: pointer; font-weight: bold; font-size: 16px; margin: 5px; }
-        .controls { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 40px; }
-        .ctrl-btn { width: 80px; height: 80px; border-radius: 50%; background: rgba(0,0,0,0.5); border: 2px solid white; color: white; font-size: 14px; pointer-events: auto; }
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Segoe UI', sans-serif; }
+        #game-container { width: 100vw; height: 100vh; position: relative; }
+        #rooster { width: 50px; height: 50px; background: orange; position: absolute; bottom: 50px; left: 50px; border-radius: 10px; z-index: 10; }
+        .obstacle { width: 40px; height: 40px; background: red; position: absolute; bottom: 50px; }
+        .pig { width: 50px; height: 50px; background: pink; border: 3px solid #d4a5a5; position: absolute; bottom: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .egg { width: 15px; height: 20px; background: white; border-radius: 50%; position: absolute; border: 1px solid #ccc; }
+        .laugh-emoji { position: absolute; font-size: 40px; animation: fadeUp 1s forwards; z-index: 20; }
+        #floor { width: 100%; height: 50px; background: #228B22; position: absolute; bottom: 0; }
+        #score { position: absolute; top: 20px; right: 20px; font-size: 24px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        #health { position: absolute; top: 20px; left: 20px; font-size: 24px; }
+        @keyframes fadeUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-50px); } }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <h1 id="gameTitle">Stealthy Rooster</h1>
-    <div id="scoreDisplay">Score: 0</div>
-    <div class="hearts" id="heartDisplay">❤️❤️❤️</div>
-</div>
-
-<div id="menu">
-    <h2 style="color: #333;">Stealthy Rooster</h2>
-    <p style="color: #666;">Choose Your Difficulty</p>
-    <button onclick="startGame(7)">Normal</button>
-    <button onclick="startGame(10)" style="background: #f1c40f;">Pro</button>
-    <button onclick="startGame(13)" style="background: #e74c3c;">Extreme</button>
-</div>
-
-<canvas id="gameCanvas"></canvas>
-
-<div class="controls" id="mobileControls" style="display: none;">
-    <button class="ctrl-btn" id="jumpBtn">JUMP</button>
-    <button class="ctrl-btn" id="duckBtn">DUCK</button>
+<div id="game-container">
+    <div id="score">Score: 0</div>
+    <div id="health">❤️❤️❤️</div>
+    <div id="rooster"></div>
+    <div id="floor"></div>
 </div>
 
 <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
+    const rooster = document.getElementById('rooster');
+    const container = document.getElementById('game-container');
+    let isJumping = false;
+    let isDucking = false;
+    let roosterY = 50;
+    let jumpVelocity = 0;
+    const gravity = 0.6;
+    const JUMP_STRENGTH = 11; // קפיצה מונמכת בכוונה
     let score = 0;
-    let gameSpeed = 0; 
-    let isGameOver = false;
-    let gameActive = false;
-    let lives = 3;
-    let invincibilityFrames = 0;
+    let health = 3;
 
-    let rooster = { x: 50, y: 0, w: 50, h: 60, dy: 0, jumpForce: -20, gravity: 0.8, isCrouching: false };
-    let obstacles = [];
-    let clouds = [];
-    let bonusStars = [];
-    let nextObstacleTimer = 0;
-
-    function startGame(speed) {
-        gameSpeed = speed;
-        gameActive = true;
-        document.getElementById('menu').style.display = 'none';
-        document.getElementById('mobileControls').style.display = 'flex';
-        for(let i=0; i<5; i++) clouds.push({x: Math.random()*canvas.width, y: 50+Math.random()*100, s: 0.5+Math.random()});
-        update();
-    }
-
-    function drawStar(x, y, radius, points, color) {
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(x, y + radius);
-        for (let i = 0; i < points * 2; i++) {
-            let angle = i * Math.PI / points;
-            let r = (i % 2 === 0) ? radius : radius / 2;
-            ctx.lineTo(x + r * Math.sin(angle), y + r * Math.cos(angle));
-        }
-        ctx.closePath();
-        ctx.fill();
-    }
-
-    function update() {
-        if (!gameActive || isGameOver) return;
-
-        score += 0.2;
-        let displayScore = Math.floor(score);
-        document.getElementById('scoreDisplay').innerText = "Score: " + displayScore;
-        if (invincibilityFrames > 0) invincibilityFrames--;
-
-        rooster.dy += rooster.gravity;
-        rooster.y += rooster.dy;
-        let groundY = canvas.height - 50;
-        let currentH = rooster.isCrouching ? 30 : 60;
-        
-        if (rooster.y > groundY - currentH) {
-            rooster.y = groundY - currentH;
-            rooster.dy = 0;
-        }
-
-        // Spawning Logic
-        nextObstacleTimer--;
-        if (nextObstacleTimer <= 0) {
-            let isAir = Math.random() > 0.6;
-            let obsY = isAir ? groundY - 75 : groundY - 30; 
-            obstacles.push({ x: canvas.width, y: obsY, radius: 20, type: isAir ? 'air' : 'ground' });
-            
-            // Spawn Yellow Heart Star after 750 points
-            if (displayScore > 750 && Math.random() < 0.2) {
-                bonusStars.push({ x: canvas.width + 200, y: groundY - 80, radius: 15 });
-            }
-            
-            nextObstacleTimer = 70 + Math.random() * 50;
-        }
-
-        // Obstacles collision (Black Stars)
-        obstacles.forEach((obs, i) => {
-            obs.x -= gameSpeed;
-            let p = 10; 
-            let rH = rooster.isCrouching ? 30 : 60;
-            if (invincibilityFrames === 0 && 
-                rooster.x + p < obs.x + obs.radius && rooster.x + rooster.w - p > obs.x - obs.radius &&
-                rooster.y + p < obs.y + obs.radius && rooster.y + rH - p > obs.y - obs.radius) {
-                lives--;
-                invincibilityFrames = 80;
-                document.getElementById('heartDisplay').innerText = "❤️".repeat(lives);
-                obstacles.splice(i, 1);
-                if (lives <= 0) { isGameOver = true; alert("Game Over! Score: " + displayScore); location.reload(); }
-            }
-        });
-
-        // Bonus Stars logic (Yellow Stars)
-        bonusStars.forEach((star, i) => {
-            star.x -= gameSpeed;
-            let rH = rooster.isCrouching ? 30 : 60;
-            if (rooster.x < star.x + star.radius && rooster.x + rooster.w > star.x - star.radius &&
-                rooster.y < star.y + star.radius && rooster.y + rH > star.y - star.radius) {
-                if (lives < 3) {
-                    lives++;
-                    document.getElementById('heartDisplay').innerText = "❤️".repeat(lives);
-                }
-                bonusStars.splice(i, 1);
-            }
-        });
-
-        clouds.forEach(c => { c.x -= gameSpeed * 0.2; if(c.x < -100) c.x = canvas.width + 100; });
-        if (obstacles.length > 0 && obstacles[0].x < -50) obstacles.shift();
-        if (bonusStars.length > 0 && bonusStars[0].x < -50) bonusStars.shift();
-
-        draw();
-        requestAnimationFrame(update);
-    }
-
-    function draw() {
-        ctx.fillStyle = "#87CEEB"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Draw Sun and Clouds
-        ctx.fillStyle = "#FFC300"; ctx.beginPath(); ctx.arc(canvas.width - 80, 80, 40, 0, Math.PI*2); ctx.fill();
-        clouds.forEach(c => {
-            ctx.fillStyle = "white"; ctx.beginPath();
-            ctx.arc(c.x, c.y, 20*c.s, 0, Math.PI*2); ctx.arc(c.x+15*c.s, c.y-10*c.s, 20*c.s, 0, Math.PI*2);
-            ctx.arc(c.x+30*c.s, c.y, 20*c.s, 0, Math.PI*2); ctx.fill();
-        });
-        
-        // Grass
-        ctx.fillStyle = "#2ecc71"; ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
-
-        // Draw Rooster
-        ctx.save();
-        if (invincibilityFrames % 10 > 5) ctx.globalAlpha = 0.3;
-        ctx.translate(rooster.x, rooster.y);
-        let drawH = rooster.isCrouching ? rooster.h/2 : rooster.h;
-        ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.ellipse(rooster.w/2, drawH/2, rooster.w/2, drawH/2, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "red"; ctx.fillRect(rooster.w/2 - 5, -10, 15, 15);
-        ctx.fillStyle = "black"; ctx.beginPath(); ctx.arc(rooster.w - 10, drawH/3, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-
-        // Draw Obstacles (Black Stars)
-        obstacles.forEach(obs => drawStar(obs.x, obs.y, obs.radius, 5, "black"));
-
-        // Draw Bonus Stars (Yellow Stars)
-        bonusStars.forEach(star => drawStar(star.x, star.y, star.radius, 5, "#FFD700"));
-    }
-
-    // Input
-    const jump = () => { if(rooster.dy === 0 && !rooster.isCrouching) rooster.dy = rooster.jumpForce; };
+    // שליטה במקלדת
     window.addEventListener('keydown', (e) => {
-        if (e.key === 'w' || e.key === 'ArrowUp') jump();
-        if (e.key === 's' || e.key === 'ArrowDown') rooster.isCrouching = true;
-    });
-    window.addEventListener('keyup', (e) => {
-        if (e.key === 's' || e.key === 'ArrowDown') rooster.isCrouching = false;
+        if ((e.code === 'Space' || e.code === 'ArrowUp') && !isJumping && !isDucking) {
+            isJumping = true;
+            jumpVelocity = JUMP_STRENGTH;
+        }
+        if (e.code === 'ArrowDown' && !isJumping) {
+            isDucking = true;
+            rooster.style.height = '25px';
+        }
+        if (e.code === 'KeyQ') shootEgg();
     });
 
-    document.getElementById('jumpBtn').ontouchstart = (e) => { e.preventDefault(); jump(); };
-    document.getElementById('duckBtn').ontouchstart = (e) => { e.preventDefault(); rooster.isCrouching = true; };
-    document.getElementById('duckBtn').ontouchend = (e) => { e.preventDefault(); rooster.isCrouching = false; };
-</script>
-</body>
-</html>
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'ArrowDown') {
+            isDucking = false;
+            rooster.style.height = '50px';
+        }
+    });
+
+    function shootEgg() {
